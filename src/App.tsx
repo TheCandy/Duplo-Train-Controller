@@ -17,12 +17,12 @@ function App() {
     connect,
     disconnect,
     readCharacteristic,
-    writeCharacteristic
+    // writeCharacteristic
   } = useBluetooth();
 
 
   const [data, setData] = useState<string>('');
-  const [inputValue, setInputValue] = useState('');
+  // const [inputValue, setInputValue] = useState('');
 
   const connectToDevice = async () => {
     await requestDevice({
@@ -48,15 +48,15 @@ function App() {
     }
   };
 
-  const writeData = async () => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(inputValue);
-    const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, data);
-    if (success) {
-      console.log('Data written successfully');
-      setInputValue('');
-    }
-  };
+  // const writeData = async () => {
+  //   const encoder = new TextEncoder();
+  //   const data = encoder.encode(inputValue);
+  //   const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, data);
+  //   if (success) {
+  //     console.log('Data written successfully');
+  //     setInputValue('');
+  //   }
+  // };
 
   if (!isSupported) {
     return <div>Web Bluetooth not supported</div>;
