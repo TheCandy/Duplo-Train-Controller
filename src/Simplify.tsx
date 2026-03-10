@@ -5,10 +5,46 @@ import { useBluetooth } from './hooks/use-bluetooth';
 const SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
 const CHARACTERISTIC_UUID = '00001624-1212-efde-1623-785feabcd123';
 const HUB_ATTACHED_IO_MESSAGE_TYPE = 0x04;
+const PORT_INPUT_FORMAT_SETUP_SINGLE_MESSAGE_TYPE = 0x41;
+const PORT_VALUE_SINGLE_MESSAGE_TYPE = 0x45;
 const DUPLO_TRAIN_BASE_MOTOR_IO_TYPE = 0x0029;
+const DUPLO_TRAIN_BASE_SPEEDOMETER_IO_TYPE = 0x002c;
+
+const buildPortValueEnableCommand = (portId: number) => {
+  return new Uint8Array([
+    0x0a,
+    0x00,
+    PORT_INPUT_FORMAT_SETUP_SINGLE_MESSAGE_TYPE,
+    portId,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+  ]);
+};
 
 const buildDuploMotorPowerCommand = (portId: number, power: number) => {
   return new Uint8Array([0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, power]);
+};
+
+const readPortValue = (bytes: Uint8Array) => {
+  const value = new DataView(bytes.buffer, bytes.byteOffset + 4, bytes.byteLength - 4);
+
+  if (value.byteLength === 1) {
+    return value.getInt8(0);
+  }
+
+  if (value.byteLength === 2) {
+    return value.getInt16(0, true);
+  }
+
+  if (value.byteLength >= 4) {
+    return value.getInt32(0, true);
+  }
+
+  return 0;
 };
 
 function Simplify() {
@@ -21,6 +57,8 @@ function Simplify() {
     error,
   } = useBluetooth();
   const [motorPortId, setMotorPortId] = useState<number | null>(null);
+  const [speedometerPortId, setSpeedometerPortId] = useState<number | null>(null);
+  const [trainSpeed, setTrainSpeed] = useState<number | null>(null);
   const [motorPower, setMotorPower] = useState('50');
 
   const connectToDevice = async () => {
@@ -33,6 +71,8 @@ function Simplify() {
   useEffect(() => {
     if (!device?.connected) {
       setMotorPortId(null);
+      setSpeedometerPortId(null);
+      setTrainSpeed(null);
       return;
     }
 
@@ -45,6 +85,11 @@ function Simplify() {
         }
 
         const bytes = new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+        if (bytes.length >= 5 && bytes[2] === PORT_VALUE_SINGLE_MESSAGE_TYPE && speedometerPortId !== null && bytes[3] === speedometerPortId) {
+          setTrainSpeed(readPortValue(bytes));
+          return;
+        }
+
         if (bytes.length < 7 || bytes[2] !== HUB_ATTACHED_IO_MESSAGE_TYPE) {
           return;
         }
@@ -59,6 +104,15 @@ function Simplify() {
         if (ioTypeId === DUPLO_TRAIN_BASE_MOTOR_IO_TYPE) {
           setMotorPortId(bytes[3]);
         }
+
+        if (ioTypeId === DUPLO_TRAIN_BASE_SPEEDOMETER_IO_TYPE) {
+          setSpeedometerPortId(bytes[3]);
+          void writeCharacteristic(
+            SERVICE_UUID,
+            CHARACTERISTIC_UUID,
+            buildPortValueEnableCommand(bytes[3])
+          );
+        }
       });
     };
 
@@ -67,7 +121,7 @@ function Simplify() {
     return () => {
       isActive = false;
     };
-  }, [device?.connected, startNotifications]);
+  }, [device?.connected, speedometerPortId, startNotifications, writeCharacteristic]);
 
   const sendMotorPower = async (power: number) => {
     if (motorPortId === null) {
@@ -107,6 +161,8 @@ function Simplify() {
           {device?.connected && (
             <div>
               <p>Motor port: {motorPortId ?? 'detecting...'}</p>
+              <p>Speedometer port: {speedometerPortId ?? 'detecting...'}</p>
+              <p>Train speed: {trainSpeed ?? 'waiting...'}</p>
               <input
                 type="number"
                 value={motorPower}
