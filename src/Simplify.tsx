@@ -5,7 +5,7 @@ const SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
 const CHARACTERISTIC_UUID = '00001624-1212-efde-1623-785feabcd123';
 const MEDIUM_POWER = 50;
 const MAX_POWER = 100;
-const DUPLO_TRAIN_BASE_MOTOR_IO_TYPE = 0x0029;
+// const DUPLO_TRAIN_BASE_MOTOR_IO_TYPE = 0x0029;
 
 const buildDuploMotorPowerCommand = (portId: number, power: number) => {
   return new Uint8Array([0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, power]);
@@ -23,6 +23,8 @@ function Simplify() {
     writeCharacteristic
   } = useBluetooth();
 
+
+
   const connectToDevice = async () => {
     await requestDevice({
       filters: [{ services: [SERVICE_UUID] }],
@@ -31,7 +33,7 @@ function Simplify() {
   };
 
   const runTrainDuploCommand = async () => {
-    const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, buildDuploMotorPowerCommand(DUPLO_TRAIN_BASE_MOTOR_IO_TYPE, MEDIUM_POWER));
+    const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, buildDuploMotorPowerCommand(50, MEDIUM_POWER));
     if (success) {
       console.log('Data written successfully');
     }
@@ -39,7 +41,7 @@ function Simplify() {
 
 
   const runTrainMotorSpeedCommand = async () => {
-    const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, buildMotorSpeedCommand(DUPLO_TRAIN_BASE_MOTOR_IO_TYPE, MEDIUM_POWER, MAX_POWER));
+    const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, buildMotorSpeedCommand(50, MEDIUM_POWER, MAX_POWER));
     if (success) {
       console.log('Data written successfully');
     }
