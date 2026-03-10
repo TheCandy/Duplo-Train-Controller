@@ -1,5 +1,5 @@
 import { Flex, Text, Button } from "@radix-ui/themes";
-import { useBluetooth } from './hooks/use-bluetooth-simple';
+import { useBluetooth } from './hooks/use-bluetooth';
 import { useEffect, useRef, useState } from 'react';
 
 

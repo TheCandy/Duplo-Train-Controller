@@ -33,8 +33,6 @@ interface BluetoothRemoteGATTCharacteristic {
   value?: DataView | null;
   readValue(): Promise<DataView>;
   writeValue(value: BufferSource): Promise<void>;
-  writeValueWithResponse?(value: BufferSource): Promise<void>;
-  writeValueWithoutResponse?(value: BufferSource): Promise<void>;
   startNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
   stopNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
   addEventListener(
@@ -138,26 +136,6 @@ export const useBluetooth = (
   const serverRef = useRef<BluetoothRemoteGATTServer | null>(null);
   const characteristicsRef =
     useRef<Map<string, BluetoothRemoteGATTCharacteristic>>(new Map());
-  const gattOperationQueueRef = useRef<Promise<void>>(Promise.resolve());
-
-  const enqueueGattOperation = useCallback(async <T,>(
-    operation: () => Promise<T>
-  ): Promise<T> => {
-    const previousOperation = gattOperationQueueRef.current.catch(() => undefined);
-
-    let releaseQueue: () => void = () => undefined;
-    gattOperationQueueRef.current = new Promise<void>((resolve) => {
-      releaseQueue = resolve;
-    });
-
-    await previousOperation;
-
-    try {
-      return await operation();
-    } finally {
-      releaseQueue();
-    }
-  }, []);
 
   // Check if Web Bluetooth API is supported
   const isSupported =
@@ -319,26 +297,24 @@ export const useBluetooth = (
       serviceUuid: BluetoothServiceUUID,
       characteristicUuid: BluetoothServiceUUID
     ): Promise<DataView | null> => {
-      return enqueueGattOperation(async () => {
-        const characteristic = await getCharacteristic(
-          serviceUuid,
-          characteristicUuid
-        );
-        if (!characteristic) return null;
+      const characteristic = await getCharacteristic(
+        serviceUuid,
+        characteristicUuid
+      );
+      if (!characteristic) return null;
 
-        try {
-          setError(null);
-          const value = await characteristic.readValue();
-          return value;
-        } catch (err) {
-          const errorMessage =
-            err instanceof Error ? err.message : "Failed to read characteristic";
-          setError(errorMessage);
-          return null;
-        }
-      });
+      try {
+        setError(null);
+        const value = await characteristic.readValue();
+        return value;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to read characteristic";
+        setError(errorMessage);
+        return null;
+      }
     },
-    [enqueueGattOperation, getCharacteristic]
+    [getCharacteristic]
   );
 
   // Write characteristic value
@@ -348,34 +324,24 @@ export const useBluetooth = (
       characteristicUuid: BluetoothServiceUUID,
       value: BufferSource
     ): Promise<boolean> => {
-      return enqueueGattOperation(async () => {
-        const characteristic = await getCharacteristic(
-          serviceUuid,
-          characteristicUuid
-        );
-        if (!characteristic) return false;
+      const characteristic = await getCharacteristic(
+        serviceUuid,
+        characteristicUuid
+      );
+      if (!characteristic) return false;
 
-        try {
-          setError(null);
-
-          if (characteristic.writeValueWithoutResponse) {
-            await characteristic.writeValueWithoutResponse(value);
-          } else if (characteristic.writeValueWithResponse) {
-            await characteristic.writeValueWithResponse(value);
-          } else {
-            await characteristic.writeValue(value);
-          }
-
-          return true;
-        } catch (err) {
-          const errorMessage =
-            err instanceof Error ? err.message : "Failed to write characteristic";
-          setError(errorMessage);
-          return false;
-        }
-      });
+      try {
+        setError(null);
+        await characteristic.writeValue(value);
+        return true;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to write characteristic";
+        setError(errorMessage);
+        return false;
+      }
     },
-    [enqueueGattOperation, getCharacteristic]
+    [getCharacteristic]
   );
 
   // Start notifications
@@ -385,38 +351,36 @@ export const useBluetooth = (
       characteristicUuid: BluetoothServiceUUID,
       callback: (value: DataView) => void
     ): Promise<boolean> => {
-      return enqueueGattOperation(async () => {
-        const characteristic = await getCharacteristic(
-          serviceUuid,
-          characteristicUuid
+      const characteristic = await getCharacteristic(
+        serviceUuid,
+        characteristicUuid
+      );
+      if (!characteristic) return false;
+
+      try {
+        setError(null);
+        await characteristic.startNotifications();
+
+        const handleNotification = (event: Event) => {
+          const target = event.target as BluetoothRemoteGATTCharacteristic | null;
+          if (target?.value) {
+            callback(target.value);
+          }
+        };
+
+        characteristic.addEventListener(
+          "characteristicvaluechanged",
+          handleNotification
         );
-        if (!characteristic) return false;
-
-        try {
-          setError(null);
-          await characteristic.startNotifications();
-
-          const handleNotification = (event: Event) => {
-            const target = event.target as BluetoothRemoteGATTCharacteristic | null;
-            if (target?.value) {
-              callback(target.value);
-            }
-          };
-
-          characteristic.addEventListener(
-            "characteristicvaluechanged",
-            handleNotification
-          );
-          return true;
-        } catch (err) {
-          const errorMessage =
-            err instanceof Error ? err.message : "Failed to start notifications";
-          setError(errorMessage);
-          return false;
-        }
-      });
+        return true;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to start notifications";
+        setError(errorMessage);
+        return false;
+      }
     },
-    [enqueueGattOperation, getCharacteristic]
+    [getCharacteristic]
   );
 
   // Stop notifications
@@ -425,26 +389,24 @@ export const useBluetooth = (
       serviceUuid: BluetoothServiceUUID,
       characteristicUuid: BluetoothServiceUUID
     ): Promise<boolean> => {
-      return enqueueGattOperation(async () => {
-        const characteristic = await getCharacteristic(
-          serviceUuid,
-          characteristicUuid
-        );
-        if (!characteristic) return false;
+      const characteristic = await getCharacteristic(
+        serviceUuid,
+        characteristicUuid
+      );
+      if (!characteristic) return false;
 
-        try {
-          setError(null);
-          await characteristic.stopNotifications();
-          return true;
-        } catch (err) {
-          const errorMessage =
-            err instanceof Error ? err.message : "Failed to stop notifications";
-          setError(errorMessage);
-          return false;
-        }
-      });
+      try {
+        setError(null);
+        await characteristic.stopNotifications();
+        return true;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to stop notifications";
+        setError(errorMessage);
+        return false;
+      }
     },
-    [enqueueGattOperation, getCharacteristic]
+    [getCharacteristic]
   );
 
   // Cleanup on unmount
