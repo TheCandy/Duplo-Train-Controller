@@ -6,7 +6,6 @@ const SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
 const CHARACTERISTIC_UUID = '00001624-1212-efde-1623-785feabcd123';
 const HUB_ATTACHED_IO_MESSAGE_TYPE = 0x04;
 const DUPLO_TRAIN_BASE_MOTOR_IO_TYPE = 0x0029;
-const MEDIUM_POWER = 50;
 
 const buildDuploMotorPowerCommand = (portId: number, power: number) => {
   return new Uint8Array([0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, power]);
@@ -22,6 +21,7 @@ function Simplify() {
     error,
   } = useBluetooth();
   const [motorPortId, setMotorPortId] = useState<number | null>(null);
+  const [motorPower, setMotorPower] = useState('50');
 
   const connectToDevice = async () => {
     await requestDevice({
@@ -69,7 +69,7 @@ function Simplify() {
     };
   }, [device?.connected, startNotifications]);
 
-  const runTrainMotor = async () => {
+  const sendMotorPower = async (power: number) => {
     if (motorPortId === null) {
       return;
     }
@@ -77,12 +77,20 @@ function Simplify() {
     const success = await writeCharacteristic(
       SERVICE_UUID,
       CHARACTERISTIC_UUID,
-      buildDuploMotorPowerCommand(motorPortId, MEDIUM_POWER)
+      buildDuploMotorPowerCommand(motorPortId, power)
     );
 
     if (success) {
       console.log('Data written successfully');
     }
+  };
+
+  const runTrainMotor = async () => {
+    await sendMotorPower(Number(motorPower));
+  };
+
+  const stopTrain = async () => {
+    await sendMotorPower(0);
   };
 
   return (
@@ -99,7 +107,13 @@ function Simplify() {
           {device?.connected && (
             <div>
               <p>Motor port: {motorPortId ?? 'detecting...'}</p>
-              <Button onClick={runTrainMotor} disabled={motorPortId === null}>Run train motor</Button>
+              <input
+                type="number"
+                value={motorPower}
+                onChange={(event) => setMotorPower(event.target.value)}
+              />
+              <Button onClick={runTrainMotor} disabled={motorPortId === null}>Send power to motor</Button>
+              <Button onClick={stopTrain} disabled={motorPortId === null}>Stop train</Button>
             </div>
           )}
 
