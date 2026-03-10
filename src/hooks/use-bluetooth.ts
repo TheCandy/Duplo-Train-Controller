@@ -19,20 +19,22 @@ interface BluetoothLEScanFilter {
 
 type BluetoothRequestDeviceOptions =
   | {
-      filters: BluetoothLEScanFilter[];
-      optionalServices?: BluetoothServiceUUID[];
-      acceptAllDevices?: false;
-    }
+    filters: BluetoothLEScanFilter[];
+    optionalServices?: BluetoothServiceUUID[];
+    acceptAllDevices?: false;
+  }
   | {
-      acceptAllDevices: boolean;
-      optionalServices?: BluetoothServiceUUID[];
-      filters?: undefined;
-    };
+    acceptAllDevices: boolean;
+    optionalServices?: BluetoothServiceUUID[];
+    filters?: undefined;
+  };
 
 interface BluetoothRemoteGATTCharacteristic {
   value?: DataView | null;
   readValue(): Promise<DataView>;
   writeValue(value: BufferSource): Promise<void>;
+  writeValueWithResponse?(value: BufferSource): Promise<void>;
+  writeValueWithoutResponse?(value: BufferSource): Promise<void>;
   startNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
   stopNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
   addEventListener(
@@ -181,13 +183,13 @@ export const useBluetooth = (
           ? requestOptions
           : options.filters && options.filters.length > 0
             ? {
-                filters: options.filters,
-                optionalServices: options.optionalServices,
-              }
+              filters: options.filters,
+              optionalServices: options.optionalServices,
+            }
             : {
-                acceptAllDevices: options.acceptAllDevices ?? true,
-                optionalServices: options.optionalServices,
-              };
+              acceptAllDevices: options.acceptAllDevices ?? true,
+              optionalServices: options.optionalServices,
+            };
 
         const bluetoothDevice = await bluetooth.requestDevice(deviceOptions);
 
@@ -332,7 +334,15 @@ export const useBluetooth = (
 
       try {
         setError(null);
-        await characteristic.writeValue(value);
+
+        if (characteristic.writeValueWithoutResponse) {
+          await characteristic.writeValueWithoutResponse(value);
+        } else if (characteristic.writeValueWithResponse) {
+          await characteristic.writeValueWithResponse(value);
+        } else {
+          await characteristic.writeValue(value);
+        }
+
         return true;
       } catch (err) {
         const errorMessage =

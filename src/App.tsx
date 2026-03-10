@@ -40,13 +40,11 @@ function App() {
     requestDevice,
     connect,
     disconnect,
-    readCharacteristic,
     writeCharacteristic,
     startNotifications
   } = useBluetooth();
 
 
-  const [data, setData] = useState<string>('');
   const [attachedPorts, setAttachedPorts] = useState<AttachedPort[]>([]);
   const [lastNotification, setLastNotification] = useState('');
 
@@ -109,14 +107,6 @@ function App() {
     };
   }, [device?.connected, startNotifications]);
 
-  const readData = async () => {
-    const value = await readCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID);
-    if (value) {
-      const bytes = new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
-      setData(toHexString(bytes));
-    }
-  };
-
   const runTrainAtMediumSpeed = async () => {
     const message = buildDuploMotorPowerCommand(motorPortId, MEDIUM_POWER);
     const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, message);
@@ -159,8 +149,7 @@ function App() {
                 <p>Motor Port: {motorPortId}</p>
                 <Button onClick={runTrainAtMediumSpeed}>Run Train At Medium Speed</Button>
                 <Button onClick={stopTrain}>Stop Train</Button>
-                <Button onClick={readData}>Read Data</Button>
-                <p>Read Value: {data}</p>
+                <p>Hub messages arrive through notifications on this characteristic.</p>
 
                 {attachedPorts.length > 0 && (
                   <div>
