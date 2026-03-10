@@ -3,16 +3,11 @@ import { useBluetooth } from './hooks/use-bluetooth';
 
 const SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
 const CHARACTERISTIC_UUID = '00001624-1212-efde-1623-785feabcd123';
+const DEFAULT_MOTOR_PORT_ID = 0x00;
 const MEDIUM_POWER = 50;
-const MAX_POWER = 100;
-// const DUPLO_TRAIN_BASE_MOTOR_IO_TYPE = 0x0029;
 
 const buildDuploMotorPowerCommand = (portId: number, power: number) => {
   return new Uint8Array([0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, power]);
-};
-
-const buildMotorSpeedCommand = (portId: number, speed: number, maxPower: number) => {
-  return new Uint8Array([0x09, 0x00, 0x81, portId, 0x11, 0x07, speed, maxPower, 0x00]);
 };
 
 function Simplify() {
@@ -23,8 +18,6 @@ function Simplify() {
     writeCharacteristic
   } = useBluetooth();
 
-
-
   const connectToDevice = async () => {
     await requestDevice({
       filters: [{ services: [SERVICE_UUID] }],
@@ -32,16 +25,13 @@ function Simplify() {
     });
   };
 
-  const runTrainDuploCommand = async () => {
-    const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, buildDuploMotorPowerCommand(50, MEDIUM_POWER));
-    if (success) {
-      console.log('Data written successfully');
-    }
-  };
+  const runTrainMotor = async () => {
+    const success = await writeCharacteristic(
+      SERVICE_UUID,
+      CHARACTERISTIC_UUID,
+      buildDuploMotorPowerCommand(DEFAULT_MOTOR_PORT_ID, MEDIUM_POWER)
+    );
 
-
-  const runTrainMotorSpeedCommand = async () => {
-    const success = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, buildMotorSpeedCommand(50, MEDIUM_POWER, MAX_POWER));
     if (success) {
       console.log('Data written successfully');
     }
@@ -60,8 +50,7 @@ function Simplify() {
 
           {device?.connected && (
             <div>
-              <Button onClick={runTrainDuploCommand}>Run train duplo command</Button>
-              <Button onClick={runTrainMotorSpeedCommand}>Run train motor speed command</Button>
+              <Button onClick={runTrainMotor}>Run train motor</Button>
             </div>
           )}
         </div>
