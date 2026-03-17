@@ -1,5 +1,5 @@
 import { Theme, Flex, Text, Button } from "@radix-ui/themes";
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBluetooth } from './hooks/use-bluetooth';
 
 const SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
@@ -102,6 +102,9 @@ function Simplify() {
   const [selectedLedColor, setSelectedLedColor] = useState<number>(9);
   const [logs, setLogs] = useState<string[]>([]);
 
+  const speedometerPortRef = useRef<number | null>(null);
+  const colorSensorPortRef = useRef<number | null>(null);
+
   const addLog = (msg: string) => {
     setLogs((prev) => [...prev.slice(-49), msg]);
   };
@@ -136,11 +139,11 @@ function Simplify() {
         const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
         addLog(`RX [${hex}]`);
         if (bytes.length >= 5 && bytes[2] === PORT_VALUE_SINGLE_MESSAGE_TYPE) {
-          if (speedometerPortId !== null && bytes[3] === speedometerPortId) {
+          if (speedometerPortRef.current !== null && bytes[3] === speedometerPortRef.current) {
             setTrainSpeed(readPortValue(bytes));
             return;
           }
-          if (colorSensorPortId !== null && bytes[3] === colorSensorPortId) {
+          if (colorSensorPortRef.current !== null && bytes[3] === colorSensorPortRef.current) {
             setDetectedColor(bytes[4]);
             return;
           }
@@ -163,21 +166,13 @@ function Simplify() {
         }
 
         if (ioTypeId === DUPLO_TRAIN_BASE_SPEEDOMETER_IO_TYPE) {
+          speedometerPortRef.current = bytes[3];
           setSpeedometerPortId(bytes[3]);
-          void writeCharacteristic(
-            SERVICE_UUID,
-            CHARACTERISTIC_UUID,
-            buildPortValueEnableCommand(bytes[3])
-          );
         }
 
         if (ioTypeId === DUPLO_TRAIN_BASE_COLOR_SENSOR_IO_TYPE) {
+          colorSensorPortRef.current = bytes[3];
           setColorSensorPortId(bytes[3]);
-          void writeCharacteristic(
-            SERVICE_UUID,
-            CHARACTERISTIC_UUID,
-            buildPortValueEnableCommand(bytes[3], 0x01)
-          );
         }
 
         if (ioTypeId === HUB_LED_IO_TYPE) {
@@ -191,7 +186,34 @@ function Simplify() {
     return () => {
       isActive = false;
     };
-  }, [device?.connected, speedometerPortId, colorSensorPortId, startNotifications, writeCharacteristic]);
+  }, [device?.connected, startNotifications]);
+
+  // Send enable commands when ports are discovered (sequential to avoid BLE write conflicts)
+  useEffect(() => {
+    if (speedometerPortId === null || !device?.connected) return;
+    const enable = async () => {
+      addLog(`Enabling speedometer on port ${speedometerPortId}`);
+      await writeCharacteristic(
+        SERVICE_UUID,
+        CHARACTERISTIC_UUID,
+        buildPortValueEnableCommand(speedometerPortId)
+      );
+    };
+    void enable();
+  }, [speedometerPortId, device?.connected, writeCharacteristic]);
+
+  useEffect(() => {
+    if (colorSensorPortId === null || !device?.connected) return;
+    const enable = async () => {
+      addLog(`Enabling color sensor on port ${colorSensorPortId}`);
+      await writeCharacteristic(
+        SERVICE_UUID,
+        CHARACTERISTIC_UUID,
+        buildPortValueEnableCommand(colorSensorPortId, 0x01)
+      );
+    };
+    void enable();
+  }, [colorSensorPortId, device?.connected, writeCharacteristic]);
 
   const sendMotorPower = async (power: number) => {
     if (motorPortId === null) {
