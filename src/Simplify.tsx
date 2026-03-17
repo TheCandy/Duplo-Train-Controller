@@ -1,5 +1,5 @@
 import { Theme, Flex, Text, Button } from "@radix-ui/themes";
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBluetooth } from './hooks/use-bluetooth';
 
 const SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
@@ -104,10 +104,25 @@ function Simplify() {
 
   const speedometerPortRef = useRef<number | null>(null);
   const colorSensorPortRef = useRef<number | null>(null);
+  const writeQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const addLog = (msg: string) => {
     setLogs((prev) => [...prev.slice(-49), msg]);
   };
+
+  const queueWrite = useCallback(async (data: BufferSource, label: string) => {
+    const doWrite = async () => {
+      const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer);
+      const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+      addLog(`TX [${hex}] (${label})`);
+      const ok = await writeCharacteristic(SERVICE_UUID, CHARACTERISTIC_UUID, data);
+      addLog(`TX ${ok ? 'OK' : 'FAIL'}: ${label}`);
+      return ok;
+    };
+    const promise = writeQueueRef.current.then(doWrite, doWrite);
+    writeQueueRef.current = promise;
+    return promise;
+  }, [writeCharacteristic]);
 
   const connectToDevice = async () => {
     await requestDevice({
@@ -188,47 +203,25 @@ function Simplify() {
     };
   }, [device?.connected, startNotifications]);
 
-  // Send enable commands when ports are discovered (sequential to avoid BLE write conflicts)
+  // Send enable commands sequentially when ports are discovered
   useEffect(() => {
-    if (speedometerPortId === null || !device?.connected) return;
-    const enable = async () => {
-      addLog(`Enabling speedometer on port ${speedometerPortId}`);
-      await writeCharacteristic(
-        SERVICE_UUID,
-        CHARACTERISTIC_UUID,
-        buildPortValueEnableCommand(speedometerPortId)
-      );
+    if (!device?.connected) return;
+    const enablePorts = async () => {
+      if (speedometerPortId !== null) {
+        await queueWrite(buildPortValueEnableCommand(speedometerPortId), `enable speedometer port ${speedometerPortId}`);
+      }
+      if (colorSensorPortId !== null) {
+        await queueWrite(buildPortValueEnableCommand(colorSensorPortId, 0x01), `enable color sensor port ${colorSensorPortId}`);
+      }
     };
-    void enable();
-  }, [speedometerPortId, device?.connected, writeCharacteristic]);
-
-  useEffect(() => {
-    if (colorSensorPortId === null || !device?.connected) return;
-    const enable = async () => {
-      addLog(`Enabling color sensor on port ${colorSensorPortId}`);
-      await writeCharacteristic(
-        SERVICE_UUID,
-        CHARACTERISTIC_UUID,
-        buildPortValueEnableCommand(colorSensorPortId, 0x01)
-      );
-    };
-    void enable();
-  }, [colorSensorPortId, device?.connected, writeCharacteristic]);
+    void enablePorts();
+  }, [speedometerPortId, colorSensorPortId, device?.connected, queueWrite]);
 
   const sendMotorPower = async (power: number) => {
     if (motorPortId === null) {
       return;
     }
-
-    const success = await writeCharacteristic(
-      SERVICE_UUID,
-      CHARACTERISTIC_UUID,
-      buildDuploMotorPowerCommand(motorPortId, power)
-    );
-
-    if (success) {
-      addLog('Motor power written');
-    }
+    await queueWrite(buildDuploMotorPowerCommand(motorPortId, power), `motor power ${power}`);
   };
 
   const runTrainMotor = async () => {
@@ -241,11 +234,7 @@ function Simplify() {
 
   const setLedColor = async (colorIndex: number) => {
     if (ledPortId === null) return;
-    await writeCharacteristic(
-      SERVICE_UUID,
-      CHARACTERISTIC_UUID,
-      buildLedColorCommand(ledPortId, colorIndex)
-    );
+    await queueWrite(buildLedColorCommand(ledPortId, colorIndex), `LED color ${colorIndex}`);
   };
 
   return (
