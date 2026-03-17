@@ -10,7 +10,6 @@ const PORT_VALUE_SINGLE_MESSAGE_TYPE = 0x45;
 const DUPLO_TRAIN_BASE_MOTOR_IO_TYPE = 0x0029;
 const DUPLO_TRAIN_BASE_SPEEDOMETER_IO_TYPE = 0x002c;
 const DUPLO_TRAIN_BASE_COLOR_SENSOR_IO_TYPE = 0x005a;
-const HUB_LED_IO_TYPE = 0x0014;
 
 const COLOR_NAMES: Record<number, string> = {
   0: 'Black',
@@ -95,7 +94,6 @@ function Simplify() {
   const [motorPortId, setMotorPortId] = useState<number | null>(null);
   const [speedometerPortId, setSpeedometerPortId] = useState<number | null>(null);
   const [colorSensorPortId, setColorSensorPortId] = useState<number | null>(null);
-  const [ledPortId, setLedPortId] = useState<number | null>(null);
   const [trainSpeed, setTrainSpeed] = useState<number | null>(null);
   const [detectedColor, setDetectedColor] = useState<number | null>(null);
   const [motorPower, setMotorPower] = useState('50');
@@ -136,7 +134,6 @@ function Simplify() {
       setMotorPortId(null);
       setSpeedometerPortId(null);
       setColorSensorPortId(null);
-      setLedPortId(null);
       setTrainSpeed(null);
       setDetectedColor(null);
       return;
@@ -159,6 +156,7 @@ function Simplify() {
             return;
           }
           if (colorSensorPortRef.current !== null && bytes[3] === colorSensorPortRef.current) {
+            addLog(`Color detected: ${bytes[4]} (${COLOR_NAMES[bytes[4]] ?? 'unknown'})`);
             setDetectedColor(bytes[4]);
             return;
           }
@@ -189,10 +187,6 @@ function Simplify() {
           colorSensorPortRef.current = bytes[3];
           setColorSensorPortId(bytes[3]);
         }
-
-        if (ioTypeId === HUB_LED_IO_TYPE) {
-          setLedPortId(bytes[3]);
-        }
       });
     };
 
@@ -213,12 +207,9 @@ function Simplify() {
       if (colorSensorPortId !== null) {
         await queueWrite(buildPortValueEnableCommand(colorSensorPortId, 0x00), `enable color sensor port ${colorSensorPortId}`);
       }
-      if (ledPortId !== null) {
-        await queueWrite(buildPortValueEnableCommand(ledPortId, 0x00), `enable LED port ${ledPortId}`);
-      }
     };
     void enablePorts();
-  }, [speedometerPortId, colorSensorPortId, ledPortId, device?.connected, queueWrite]);
+  }, [speedometerPortId, colorSensorPortId, device?.connected, queueWrite]);
 
   const sendMotorPower = async (power: number) => {
     if (motorPortId === null) {
@@ -236,8 +227,8 @@ function Simplify() {
   };
 
   const setLedColor = async (colorIndex: number) => {
-    if (ledPortId === null) return;
-    await queueWrite(buildLedColorCommand(ledPortId, colorIndex), `LED color ${colorIndex}`);
+    if (colorSensorPortId === null) return;
+    await queueWrite(buildLedColorCommand(colorSensorPortId, colorIndex), `LED color ${colorIndex}`);
   };
 
   return (
@@ -256,7 +247,6 @@ function Simplify() {
               <p>Motor port: {motorPortId ?? 'detecting...'}</p>
               <p>Speedometer port: {speedometerPortId ?? 'detecting...'}</p>
               <p>Color sensor port: {colorSensorPortId ?? 'detecting...'}</p>
-              <p>LED port: {ledPortId ?? 'detecting...'}</p>
               <p>Train speed: {trainSpeed ?? 'waiting...'}</p>
               <p>
                 Detected color:{' '}
@@ -291,8 +281,8 @@ function Simplify() {
                       <option key={key} value={key}>{name}</option>
                     ))}
                 </select>
-                <Button onClick={() => setLedColor(selectedLedColor)} disabled={ledPortId === null}>Set LED</Button>
-                <Button onClick={() => setLedColor(255)} disabled={ledPortId === null}>LED Off</Button>
+                <Button onClick={() => setLedColor(selectedLedColor)} disabled={colorSensorPortId === null}>Set LED</Button>
+                <Button onClick={() => setLedColor(255)} disabled={colorSensorPortId === null}>LED Off</Button>
               </div>
             </div>
           )}
