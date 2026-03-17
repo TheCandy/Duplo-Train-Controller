@@ -211,11 +211,14 @@ function Simplify() {
         await queueWrite(buildPortValueEnableCommand(speedometerPortId), `enable speedometer port ${speedometerPortId}`);
       }
       if (colorSensorPortId !== null) {
-        await queueWrite(buildPortValueEnableCommand(colorSensorPortId, 0x01), `enable color sensor port ${colorSensorPortId}`);
+        await queueWrite(buildPortValueEnableCommand(colorSensorPortId, 0x00), `enable color sensor port ${colorSensorPortId}`);
+      }
+      if (ledPortId !== null) {
+        await queueWrite(buildPortValueEnableCommand(ledPortId, 0x00), `enable LED port ${ledPortId}`);
       }
     };
     void enablePorts();
-  }, [speedometerPortId, colorSensorPortId, device?.connected, queueWrite]);
+  }, [speedometerPortId, colorSensorPortId, ledPortId, device?.connected, queueWrite]);
 
   const sendMotorPower = async (power: number) => {
     if (motorPortId === null) {
