@@ -9,7 +9,7 @@ const PORT_INPUT_FORMAT_SETUP_SINGLE_MESSAGE_TYPE = 0x41;
 const PORT_VALUE_SINGLE_MESSAGE_TYPE = 0x45;
 const DUPLO_TRAIN_BASE_MOTOR_IO_TYPE = 0x0029;
 const DUPLO_TRAIN_BASE_SPEEDOMETER_IO_TYPE = 0x002c;
-const DUPLO_TRAIN_BASE_COLOR_SENSOR_IO_TYPE = 0x0025;
+const DUPLO_TRAIN_BASE_COLOR_SENSOR_IO_TYPE = 0x002b;
 const HUB_LED_IO_TYPE = 0x0017;
 
 const COLOR_NAMES: Record<number, string> = {
@@ -100,6 +100,11 @@ function Simplify() {
   const [detectedColor, setDetectedColor] = useState<number | null>(null);
   const [motorPower, setMotorPower] = useState('50');
   const [selectedLedColor, setSelectedLedColor] = useState<number>(9);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const addLog = (msg: string) => {
+    setLogs((prev) => [...prev.slice(-49), msg]);
+  };
 
   const connectToDevice = async () => {
     await requestDevice({
@@ -128,6 +133,8 @@ function Simplify() {
         }
 
         const bytes = new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+        const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+        addLog(`RX [${hex}]`);
         if (bytes.length >= 5 && bytes[2] === PORT_VALUE_SINGLE_MESSAGE_TYPE) {
           if (speedometerPortId !== null && bytes[3] === speedometerPortId) {
             setTrainSpeed(readPortValue(bytes));
@@ -145,6 +152,7 @@ function Simplify() {
 
         const event = bytes[4];
         const ioTypeId = bytes[5] | (bytes[6] << 8);
+        addLog(`IO attach: port=${bytes[3]}, event=${event}, ioType=0x${ioTypeId.toString(16).padStart(4, '0')}`);
 
         if (event !== 0x01 && event !== 0x02) {
           return;
@@ -197,7 +205,7 @@ function Simplify() {
     );
 
     if (success) {
-      console.log('Data written successfully');
+      addLog('Motor power written');
     }
   };
 
@@ -276,6 +284,14 @@ function Simplify() {
           )}
 
           {error && <p>Error: {error}</p>}
+        </div>
+        <div style={{ marginTop: 16, padding: 8, background: '#1a1a2e', color: '#0f0', fontFamily: 'monospace', fontSize: 11, maxHeight: 200, overflowY: 'auto', borderRadius: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <strong>Debug Log ({logs.length})</strong>
+            <button onClick={() => setLogs([])} style={{ fontSize: 10, background: '#333', color: '#fff', border: 'none', borderRadius: 3, padding: '2px 6px' }}>Clear</button>
+          </div>
+          {logs.length === 0 && <div style={{ color: '#666' }}>No messages yet...</div>}
+          {logs.map((log, i) => <div key={i}>{log}</div>)}
         </div>
       </Flex>
     </Theme>
